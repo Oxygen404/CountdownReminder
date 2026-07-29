@@ -8,12 +8,12 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("倒计时提醒")]
+[assembly: AssemblyTitle("提醒")]
 [assembly: AssemblyDescription("支持多个任务和悬浮窗的 Windows 倒计时提醒工具")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("倒计时提醒")]
-[assembly: AssemblyVersion("2.2.0.0")]
-[assembly: AssemblyFileVersion("2.2.0.0")]
+[assembly: AssemblyProduct("提醒")]
+[assembly: AssemblyVersion("2.2.4.0")]
+[assembly: AssemblyFileVersion("2.2.4.0")]
 
 namespace CountdownReminder
 {
@@ -29,6 +29,12 @@ namespace CountdownReminder
                 string.Equals(args[0], "--self-test", StringComparison.OrdinalIgnoreCase))
             {
                 return RunSelfTest();
+            }
+
+            if (args.Length == 1 &&
+                string.Equals(args[0], "--tray-test", StringComparison.OrdinalIgnoreCase))
+            {
+                return RunTrayBehaviorTest();
             }
 
             bool runUiTest = args.Length == 1 &&
@@ -85,27 +91,71 @@ namespace CountdownReminder
 
             using (FloatingCountdownForm floatingForm = new FloatingCountdownForm())
             {
-                if (floatingForm.ReminderTextVisible)
-                {
-                    return 5;
-                }
-
-                floatingForm.SetReminderVisible(true);
                 if (!floatingForm.ReminderTextVisible ||
                     floatingForm.ReminderMenuText != "隐藏提醒内容")
                 {
-                    return 6;
+                    return 5;
                 }
 
                 floatingForm.SetReminderVisible(false);
                 if (floatingForm.ReminderTextVisible ||
                     floatingForm.ReminderMenuText != "显示提醒内容")
                 {
+                    return 6;
+                }
+
+                floatingForm.SetReminderVisible(true);
+                if (!floatingForm.ReminderTextVisible ||
+                    floatingForm.ReminderMenuText != "隐藏提醒内容")
+                {
                     return 7;
                 }
             }
 
             return 0;
+        }
+
+        private static int RunTrayBehaviorTest()
+        {
+            int result = 20;
+            using (DarkMainForm form = new DarkMainForm(false))
+            {
+                form.Shown += delegate
+                {
+                    form.Close();
+                    if (form.Visible ||
+                        !form.TrayIconVisible ||
+                        !form.TrayMenuReady)
+                    {
+                        result = 21;
+                        form.RequestApplicationExit();
+                        return;
+                    }
+
+                    form.RestoreFromTrayForTest();
+                    if (!form.Visible || form.TrayIconVisible)
+                    {
+                        result = 22;
+                        form.RequestApplicationExit();
+                        return;
+                    }
+
+                    form.Close();
+                    if (form.Visible || !form.TrayIconVisible)
+                    {
+                        result = 23;
+                        form.RequestApplicationExit();
+                        return;
+                    }
+
+                    result = 0;
+                    form.SelectTrayExitForTest();
+                };
+
+                Application.Run(form);
+            }
+
+            return result;
         }
     }
 
@@ -243,6 +293,8 @@ namespace CountdownReminder
                     Hide();
                 }
             };
+
+            SetReminderVisible(true);
         }
 
         internal CountdownItem CurrentItem
@@ -418,7 +470,7 @@ namespace CountdownReminder
         internal ReminderDialog(string reminderText)
         {
             string content = MainForm.NormalizeReminder(reminderText);
-            Text = "倒计时提醒";
+            Text = "提醒";
             StartPosition = FormStartPosition.Manual;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -490,7 +542,7 @@ namespace CountdownReminder
             _reminderDialogs = new List<ReminderDialog>();
             _floatingForm = new FloatingCountdownForm();
 
-            Text = "倒计时提醒";
+            Text = "提醒";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(790, 610);
             ClientSize = new Size(790, 610);
@@ -499,7 +551,7 @@ namespace CountdownReminder
             AutoScaleMode = AutoScaleMode.Dpi;
 
             Label titleLabel = new Label();
-            titleLabel.Text = "倒计时提醒";
+            titleLabel.Text = "提醒";
             titleLabel.Font = new Font(Font.FontFamily, 21F, FontStyle.Bold);
             titleLabel.ForeColor = Color.FromArgb(31, 41, 55);
             titleLabel.AutoSize = true;
@@ -699,7 +751,6 @@ namespace CountdownReminder
                     CountdownItem floatingItem = CreateCountdown(0.1M, "提交日报");
                     SelectItem(floatingItem);
                     _floatingForm.ShowFor(floatingItem);
-                    _floatingForm.SetReminderVisible(true);
                     RefreshAllRows();
                 }
                 else
@@ -1492,8 +1543,6 @@ namespace CountdownReminder
     internal sealed class MinutesInputControl : Control
     {
         private readonly TextBox _textBox;
-        private readonly ArrowButton _upButton;
-        private readonly ArrowButton _downButton;
         private decimal _value;
 
         internal MinutesInputControl()
@@ -1508,7 +1557,6 @@ namespace CountdownReminder
             BackColor = Color.Transparent;
             Minimum = 0.1M;
             Maximum = 43200M;
-            Increment = 0.5M;
 
             _textBox = new TextBox();
             _textBox.BorderStyle = BorderStyle.None;
@@ -1533,14 +1581,6 @@ namespace CountdownReminder
             _textBox.Leave += delegate { CommitValue(); };
             Controls.Add(_textBox);
 
-            _upButton = new ArrowButton(true);
-            _upButton.Click += delegate { Value += Increment; };
-            Controls.Add(_upButton);
-
-            _downButton = new ArrowButton(false);
-            _downButton.Click += delegate { Value -= Increment; };
-            Controls.Add(_downButton);
-
             Value = 5M;
         }
 
@@ -1548,7 +1588,6 @@ namespace CountdownReminder
 
         internal decimal Minimum { get; set; }
         internal decimal Maximum { get; set; }
-        internal decimal Increment { get; set; }
 
         internal decimal Value
         {
@@ -1574,17 +1613,8 @@ namespace CountdownReminder
         protected override void OnResize(EventArgs eventArgs)
         {
             base.OnResize(eventArgs);
-            int buttonWidth = 46;
             _textBox.Location = new Point(16, Math.Max(8, (Height - 28) / 2));
-            _textBox.Size = new Size(Math.Max(20, Width - buttonWidth - 26), 30);
-            _upButton.Location = new Point(Width - buttonWidth, 1);
-            _upButton.Size = new Size(buttonWidth - 1, (Height - 2) / 2);
-            _downButton.Location = new Point(
-                Width - buttonWidth,
-                1 + ((Height - 2) / 2));
-            _downButton.Size = new Size(
-                buttonWidth - 1,
-                Height - 2 - ((Height - 2) / 2));
+            _textBox.Size = new Size(Math.Max(20, Width - 32), 30);
 
             using (GraphicsPath path = DarkUi.RoundedPath(
                 new Rectangle(0, 0, Width, Height),
@@ -1601,16 +1631,9 @@ namespace CountdownReminder
             using (GraphicsPath path = DarkUi.RoundedPath(rectangle, 10))
             using (SolidBrush brush = new SolidBrush(DarkUi.Input))
             using (Pen pen = new Pen(DarkUi.Border, 1F))
-            using (Pen separatorPen = new Pen(DarkUi.BorderSoft, 1F))
             {
                 eventArgs.Graphics.FillPath(brush, path);
                 eventArgs.Graphics.DrawPath(pen, path);
-                eventArgs.Graphics.DrawLine(
-                    separatorPen,
-                    Width - 46,
-                    2,
-                    Width - 46,
-                    Height - 3);
             }
         }
 
@@ -1827,7 +1850,7 @@ namespace CountdownReminder
         internal DarkReminderDialog(string reminderText)
         {
             string content = MainForm.NormalizeReminder(reminderText);
-            Text = "倒计时提醒";
+            Text = "提醒";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
             ShowInTaskbar = false;
@@ -1922,8 +1945,12 @@ namespace CountdownReminder
         private readonly List<CountdownItem> _items;
         private readonly List<DarkReminderDialog> _reminderDialogs;
         private readonly FloatingCountdownForm _floatingForm;
+        private readonly Icon _applicationIcon;
+        private readonly ContextMenuStrip _trayMenu;
+        private readonly NotifyIcon _trayIcon;
 
-        private bool _closingConfirmed;
+        private bool _exitRequested;
+        private bool _trayTipShown;
         private bool _maximized;
         private Rectangle _restoreBounds;
         private int _reminderOffset;
@@ -1933,8 +1960,38 @@ namespace CountdownReminder
             _items = new List<CountdownItem>();
             _reminderDialogs = new List<DarkReminderDialog>();
             _floatingForm = new FloatingCountdownForm();
+            _applicationIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            if (_applicationIcon == null)
+            {
+                _applicationIcon = (Icon)SystemIcons.Application.Clone();
+            }
+            _trayMenu = new ContextMenuStrip();
 
-            Text = "倒计时提醒";
+            ToolStripMenuItem openTrayItem = new ToolStripMenuItem("打开提醒");
+            openTrayItem.Click += delegate { RestoreFromTray(); };
+            _trayMenu.Items.Add(openTrayItem);
+            _trayMenu.Items.Add(new ToolStripSeparator());
+
+            ToolStripMenuItem exitTrayItem = new ToolStripMenuItem("退出");
+            exitTrayItem.Click += delegate { RequestApplicationExit(); };
+            _trayMenu.Items.Add(exitTrayItem);
+
+            _trayIcon = new NotifyIcon();
+            _trayIcon.Icon = _applicationIcon;
+            _trayIcon.Text = "提醒";
+            _trayIcon.ContextMenuStrip = _trayMenu;
+            _trayIcon.Visible = false;
+            _trayIcon.MouseClick += delegate(object sender, MouseEventArgs eventArgs)
+            {
+                if (eventArgs.Button == MouseButtons.Left)
+                {
+                    RestoreFromTray();
+                }
+            };
+            _trayIcon.DoubleClick += delegate { RestoreFromTray(); };
+
+            Text = "提醒";
+            Icon = _applicationIcon;
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(960, 760);
@@ -1952,7 +2009,7 @@ namespace CountdownReminder
             _titleBar.Controls.Add(_appIcon);
 
             _windowTitle = new Label();
-            _windowTitle.Text = "倒计时提醒";
+            _windowTitle.Text = "提醒";
             _windowTitle.Font = new Font(Font.FontFamily, 11F, FontStyle.Regular);
             _windowTitle.ForeColor = DarkUi.Text;
             _windowTitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -1971,7 +2028,7 @@ namespace CountdownReminder
             _titleBar.Controls.Add(_closeButton);
 
             _heroTitle = new Label();
-            _heroTitle.Text = "倒计时提醒";
+            _heroTitle.Text = "提醒";
             _heroTitle.Font = new Font(Font.FontFamily, 25F, FontStyle.Bold);
             _heroTitle.ForeColor = DarkUi.Text;
             _heroTitle.AutoSize = true;
@@ -2140,7 +2197,6 @@ namespace CountdownReminder
                     CountdownItem floatingItem = CreateCountdown(0.15M, "提交日报");
                     SelectItem(floatingItem);
                     _floatingForm.ShowFor(floatingItem);
-                    _floatingForm.SetReminderVisible(true);
                     RefreshAllRows();
                 }
                 else
@@ -2152,6 +2208,10 @@ namespace CountdownReminder
             FormClosed += delegate
             {
                 _uiTimer.Stop();
+                _trayIcon.Visible = false;
+                _trayIcon.Dispose();
+                _trayMenu.Dispose();
+                _applicationIcon.Dispose();
                 if (!_floatingForm.IsDisposed)
                 {
                     _floatingForm.CloseForApplicationExit();
@@ -2604,42 +2664,97 @@ namespace CountdownReminder
 
         private void DarkMainForm_FormClosing(object sender, FormClosingEventArgs eventArgs)
         {
-            if (_closingConfirmed)
+            if (_exitRequested)
             {
                 return;
             }
 
-            int runningCount = 0;
-            foreach (CountdownItem item in _items)
-            {
-                if (item.Status == CountdownStatus.Running)
-                {
-                    runningCount++;
-                }
-            }
-
-            if (runningCount == 0)
-            {
-                _closingConfirmed = true;
-                return;
-            }
-
-            DialogResult result = MessageBox.Show(
-                this,
-                "还有 " + runningCount + " 个倒计时正在进行，确定退出吗？",
-                "退出确认",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2);
-
-            if (result == DialogResult.Yes)
-            {
-                _closingConfirmed = true;
-            }
-            else
+            if (eventArgs.CloseReason == CloseReason.UserClosing)
             {
                 eventArgs.Cancel = true;
+                HideToTray();
+                return;
             }
+
+            _exitRequested = true;
+        }
+
+        internal bool TrayIconVisible
+        {
+            get { return _trayIcon.Visible; }
+        }
+
+        internal bool TrayMenuReady
+        {
+            get
+            {
+                return _trayMenu.Items.Count == 3 &&
+                    _trayMenu.Items[0].Text == "打开提醒" &&
+                    _trayMenu.Items[2].Text == "退出";
+            }
+        }
+
+        internal void RestoreFromTrayForTest()
+        {
+            RestoreFromTray();
+        }
+
+        internal void SelectTrayExitForTest()
+        {
+            ToolStripMenuItem exitItem = _trayMenu.Items[2] as ToolStripMenuItem;
+            if (exitItem != null)
+            {
+                exitItem.PerformClick();
+            }
+        }
+
+        internal void RequestApplicationExit()
+        {
+            if (_exitRequested)
+            {
+                return;
+            }
+
+            _exitRequested = true;
+            _trayIcon.Visible = false;
+            Close();
+        }
+
+        private void HideToTray()
+        {
+            Hide();
+            ShowInTaskbar = false;
+            _trayIcon.Visible = true;
+
+            if (!_trayTipShown)
+            {
+                _trayTipShown = true;
+                _trayIcon.ShowBalloonTip(
+                    2500,
+                    "提醒",
+                    "程序仍在后台运行，右键托盘图标可退出。",
+                    ToolTipIcon.Info);
+            }
+        }
+
+        private void RestoreFromTray()
+        {
+            if (_exitRequested)
+            {
+                return;
+            }
+
+            _trayIcon.Visible = false;
+            ShowInTaskbar = true;
+            Show();
+
+            if (WindowState == FormWindowState.Minimized)
+            {
+                WindowState = FormWindowState.Normal;
+            }
+
+            Activate();
+            BringToFront();
         }
     }
 }
