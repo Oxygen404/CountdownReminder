@@ -11,6 +11,7 @@ namespace ClaudeConsole
             TestLegacyPayload();
             TestLimitsPayload();
             TestClamping();
+            TestTrayTextPrioritizesSession();
 
             if (Array.Exists(args, delegate(string value) { return value == "--live"; }))
             {
@@ -45,6 +46,19 @@ namespace ClaudeConsole
             AssertEqual("clamp low", 100, low.RemainingPercent);
         }
 
+        private static void TestTrayTextPrioritizesSession()
+        {
+            UsageSnapshot snapshot = new UsageSnapshot(
+                new QuotaInfo(19, DateTimeOffset.Now),
+                new QuotaInfo(64, DateTimeOffset.Now),
+                DateTimeOffset.Now);
+            string actual = ClaudeConsoleContext.BuildTrayText(snapshot);
+            AssertEqual(
+                "tray text prioritizes session",
+                "Claude Console · 5 小时剩余 36% · 本周 81%",
+                actual);
+        }
+
         private static void TestLiveFetch()
         {
             try
@@ -73,6 +87,13 @@ namespace ClaudeConsole
         private static void AssertEqual(string name, int expected, int actual)
         {
             if (expected == actual) return;
+            failures++;
+            Console.WriteLine("{0}: expected {1}, actual {2}", name, expected, actual);
+        }
+
+        private static void AssertEqual(string name, string expected, string actual)
+        {
+            if (string.Equals(expected, actual, StringComparison.Ordinal)) return;
             failures++;
             Console.WriteLine("{0}: expected {1}, actual {2}", name, expected, actual);
         }

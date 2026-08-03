@@ -20,8 +20,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Claude Code 额度托盘悬浮卡片")]
 [assembly: AssemblyCompany("Claude Console")]
 [assembly: AssemblyProduct("Claude Console")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace ClaudeConsole
 {
@@ -101,13 +101,26 @@ namespace ClaudeConsole
             refreshTimer = new System.Windows.Forms.Timer();
             refreshTimer.Interval = 5 * 60 * 1000;
             refreshTimer.Tick += delegate { RefreshUsageAsync(false); };
-            refreshTimer.Start();
-
-            RefreshUsageAsync(false);
-            if (showAtStartup)
+            if (previewMode)
             {
-                popup.Shown += PopupShownOnce;
+                DateTimeOffset now = DateTimeOffset.Now;
+                UsageSnapshot preview = new UsageSnapshot(
+                    new QuotaInfo(20, now.AddDays(2)),
+                    new QuotaInfo(73, now.AddHours(2)),
+                    now);
+                popup.SetSnapshot(preview);
+                trayIcon.Text = BuildTrayText(preview);
                 ShowPopup();
+            }
+            else
+            {
+                refreshTimer.Start();
+                RefreshUsageAsync(false);
+                if (showAtStartup)
+                {
+                    popup.Shown += PopupShownOnce;
+                    ShowPopup();
+                }
             }
         }
 
@@ -166,9 +179,12 @@ namespace ClaudeConsole
             }
         }
 
-        private static string BuildTrayText(UsageSnapshot snapshot)
+        internal static string BuildTrayText(UsageSnapshot snapshot)
         {
-            return string.Format(CultureInfo.CurrentCulture, "Claude Console · 本周剩余 {0}%", snapshot.Weekly.RemainingPercent);
+            return string.Format(CultureInfo.CurrentCulture,
+                "Claude Console · 5 小时剩余 {0}% · 本周 {1}%",
+                snapshot.Session.RemainingPercent,
+                snapshot.Weekly.RemainingPercent);
         }
 
         private static string TrimForTray(string value)
@@ -508,38 +524,38 @@ namespace ClaudeConsole
             QuotaInfo weekly = snapshot.Weekly;
             QuotaInfo session = snapshot.Session;
 
-            DrawSectionMarker(g, new Point(24, 91), Color.FromArgb(218, 102, 73));
-            DrawText(g, "本周额度", bodyBoldFont, Color.FromArgb(62, 63, 64), new PointF(39, 83));
-            DrawText(g, "本周剩余", tinyFont, Color.FromArgb(96, 96, 94), new PointF(282, 84));
+            DrawSectionMarker(g, new Point(24, 91), Color.FromArgb(42, 151, 142));
+            DrawText(g, "5 小时额度", bodyBoldFont, Color.FromArgb(62, 63, 64), new PointF(39, 83));
+            DrawRightAligned(g, "当前窗口剩余", tinyFont, Color.FromArgb(96, 96, 94), 344, 84);
 
-            DrawText(g, weekly.RemainingPercent.ToString(CultureInfo.CurrentCulture) + "%", numberFont,
+            DrawText(g, session.RemainingPercent.ToString(CultureInfo.CurrentCulture) + "%", numberFont,
                 Color.FromArgb(54, 55, 56), new PointF(20, 108));
-            DrawRightAligned(g, FormatReset(weekly.ResetsAt), tinyFont, Color.FromArgb(106, 106, 104), 344, 133);
+            DrawRightAligned(g, FormatReset(session.ResetsAt), tinyFont, Color.FromArgb(106, 106, 104), 344, 133);
 
-            DrawProgress(g, new Rectangle(24, 174, 320, 9), weekly.RemainingPercent / 100f,
-                Color.FromArgb(218, 102, 73));
+            DrawProgress(g, new Rectangle(24, 174, 320, 9), session.RemainingPercent / 100f,
+                Color.FromArgb(42, 151, 142));
 
-            Color weeklyStateColor = StatusColor(weekly.RemainingPercent);
-            DrawSectionMarker(g, new Point(24, 208), weeklyStateColor);
-            DrawText(g, StatusText(weekly.RemainingPercent), bodyBoldFont, weeklyStateColor, new PointF(39, 200));
-            DrawRightAligned(g, "已使用 " + weekly.UsedPercent + "%", tinyFont, Color.FromArgb(109, 109, 107), 344, 202);
+            Color sessionStateColor = StatusColor(session.RemainingPercent);
+            DrawSectionMarker(g, new Point(24, 208), sessionStateColor);
+            DrawText(g, StatusText(session.RemainingPercent), bodyBoldFont, sessionStateColor, new PointF(39, 200));
+            DrawRightAligned(g, "已使用 " + session.UsedPercent + "%", tinyFont, Color.FromArgb(109, 109, 107), 344, 202);
 
             using (Pen divider = new Pen(Color.FromArgb(28, 42, 43, 44), 1f))
             {
                 g.DrawLine(divider, 24, 236, 344, 236);
             }
 
-            DrawSectionMarker(g, new Point(24, 263), Color.FromArgb(42, 151, 142));
-            DrawText(g, "5 小时额度", bodyBoldFont, Color.FromArgb(62, 63, 64), new PointF(39, 255));
-            DrawText(g, "近期可用", tinyFont, Color.FromArgb(96, 96, 94), new PointF(294, 256));
+            DrawSectionMarker(g, new Point(24, 263), Color.FromArgb(218, 102, 73));
+            DrawText(g, "本周额度", bodyBoldFont, Color.FromArgb(62, 63, 64), new PointF(39, 255));
+            DrawRightAligned(g, "长期余量", tinyFont, Color.FromArgb(96, 96, 94), 344, 256);
 
-            DrawText(g, session.RemainingPercent.ToString(CultureInfo.CurrentCulture) + "%", secondaryNumberFont,
+            DrawText(g, weekly.RemainingPercent.ToString(CultureInfo.CurrentCulture) + "%", secondaryNumberFont,
                 Color.FromArgb(54, 55, 56), new PointF(22, 287));
             DrawText(g, "剩余", tinyFont, Color.FromArgb(111, 111, 109), new PointF(92, 302));
-            DrawRightAligned(g, FormatReset(session.ResetsAt), tinyFont, Color.FromArgb(106, 106, 104), 344, 302);
+            DrawRightAligned(g, FormatReset(weekly.ResetsAt), tinyFont, Color.FromArgb(106, 106, 104), 344, 302);
 
-            DrawProgress(g, new Rectangle(24, 337, 320, 9), session.RemainingPercent / 100f,
-                Color.FromArgb(42, 151, 142));
+            DrawProgress(g, new Rectangle(24, 337, 320, 9), weekly.RemainingPercent / 100f,
+                Color.FromArgb(218, 102, 73));
 
             Rectangle hint = new Rectangle(24, 367, 320, 35);
             using (SolidBrush hintBrush = new SolidBrush(Color.FromArgb(13, 42, 151, 142)))
@@ -547,7 +563,7 @@ namespace ClaudeConsole
             {
                 g.FillPath(hintBrush, hintPath);
             }
-            DrawText(g, BuildPaceMessage(weekly), tinyFont, Color.FromArgb(70, 91, 88), new PointF(36, 377));
+            DrawText(g, BuildSessionMessage(session), tinyFont, Color.FromArgb(70, 91, 88), new PointF(36, 377));
         }
 
         private void DrawFooter(Graphics g)
@@ -608,11 +624,11 @@ namespace ClaudeConsole
             return Color.FromArgb(210, 83, 64);
         }
 
-        private static string BuildPaceMessage(QuotaInfo weekly)
+        private static string BuildSessionMessage(QuotaInfo session)
         {
-            if (weekly.RemainingPercent >= 60) return "按当前余量，可以从容安排本周的 Claude Code 使用。";
-            if (weekly.RemainingPercent >= 30) return "本周余量适中，长任务前可以先确认一次额度。";
-            return "本周余量不多，建议优先处理关键任务。";
+            if (session.RemainingPercent >= 60) return "当前 5 小时余量充足，可以继续专注当前任务。";
+            if (session.RemainingPercent >= 30) return "当前 5 小时余量适中，长任务前留意消耗。";
+            return "当前 5 小时余量较低，建议优先处理关键任务。";
         }
 
         private static string FormatReset(DateTimeOffset value)
