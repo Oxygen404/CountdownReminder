@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | [倒计时提醒](./countdown-reminder/) | 同时管理多个倒计时，支持桌面悬浮、到点声音提醒和系统托盘运行 | 运行 [`倒计时提醒.exe`](./countdown-reminder/倒计时提醒.exe) |
 | [Claude Console](./claude-Console/) | 在系统托盘中查看 Claude Code 本周额度和 5 小时额度 | 运行 [`Claude Console.exe`](<./claude-Console/Claude Console.exe>) |
+| [Clash 流量哨兵](./clash-traffic-sentinel/) | 统计真正经过 Clash Verge 代理节点的流量，提供应用与域名排行和异常流量提醒 | 运行 [`Clash 流量哨兵.exe`](<./clash-traffic-sentinel/Clash 流量哨兵.exe>) |
 
 ## 快速使用
 
@@ -27,9 +28,15 @@
 │  ├─ CountdownReminder.cs
 │  ├─ CountdownReminder.ico
 │  └─ 倒计时提醒.exe
-└─ claude-Console/
+├─ claude-Console/
+│  ├─ README.md
+│  ├─ Claude Console.exe
+│  ├─ src/
+│  ├─ tests/
+│  └─ tools/
+└─ clash-traffic-sentinel/
    ├─ README.md
-   ├─ Claude Console.exe
+   ├─ Clash 流量哨兵.exe
    ├─ src/
    ├─ tests/
    └─ tools/
@@ -39,6 +46,7 @@
 
 - 倒计时提醒完全在本地运行，不访问网络。
 - Claude Console 只在运行时读取本机 Claude Code 登录状态，并通过 Claude 的 HTTPS 接口查询额度；不会把令牌写入程序、配置文件或日志。
+- Clash 流量哨兵只读取 Clash Verge 的本地命名管道和配置；统计保存在 EXE 同目录的本地数据库，不上传、不抓包，也不解密 HTTPS。
 - 仓库中不包含个人账号、访问令牌、刷新令牌或 API 密钥。
 
 更详细的启动、构建和操作说明请查看各工具目录中的 README。
