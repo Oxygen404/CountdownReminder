@@ -1,0 +1,7 @@
+# Clash 流量哨兵运行时数据（只保存在本机）
+clash-traffic-sentinel/traffic-data.db
+clash-traffic-sentinel/traffic-data.db-*
+clash-traffic-sentinel/*.db-journal
+clash-traffic-sentinel/obj/
+clash-traffic-sentinel/artifacts/
+
